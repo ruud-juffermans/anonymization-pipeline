@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.gitignore
+
+# Never bake case data or secrets into an image.
+vaults/
+out/
+data/
+.env
+*.vault

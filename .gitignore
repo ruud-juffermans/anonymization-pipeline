@@ -1,0 +1,25 @@
+# --- Confidential data: NEVER commit -------------------------------------
+# Encrypted case vaults, anonymized outputs, and input documents.
+vaults/
+out/
+data/
+*.vault
+
+# Secrets
+.env
+
+# --- Python ----------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- OS / editor -----------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp

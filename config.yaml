@@ -1,0 +1,44 @@
+# Anonimization pipeline configuration
+
+vault_dir: vaults          # where per-case encrypted vaults are stored
+output_dir: out
+
+# Token format per entity type. {n} is the per-type counter, zero-padded.
+tokens:
+  PERSON:   "PERSON_{n:03d}"
+  ORG:      "ORG_{n:03d}"
+  LOCATION: "LOC_{n:03d}"
+  BSN:      "BSN_{n:03d}"
+  IBAN:     "IBAN_{n:03d}"
+  CARD:     "CARD_{n:03d}"
+  PHONE:    "PHONE_{n:03d}"
+  EMAIL:    "EMAIL_{n:03d}"
+
+# Which deterministic (regex + checksum) detectors to run.
+rules:
+  bsn:    true     # Dutch BSN, validated with the 11-proef
+  iban:   true     # validated with mod-97
+  card:   true     # validated with Luhn
+  phone:  true     # Dutch phone numbers
+  email:  true
+
+# NER backend for unstructured entities (names / orgs / locations).
+#   backend: ollama | spacy | none
+# Values like ${OLLAMA_HOST} are filled from the environment / .env at load time.
+ner:
+  backend: "${NER_BACKEND}"
+  ollama:
+    host: "${OLLAMA_HOST}"            # loopback or the local ollama service only
+    model: "${OLLAMA_MODEL}"
+    timeout_s: 120
+  spacy:
+    model: "nl_core_news_lg"
+  # Map a backend's raw labels onto our canonical types.
+  label_map:
+    PER: PERSON
+    PERSON: PERSON
+    ORG: ORG
+    LOC: LOCATION
+    GPE: LOCATION
+    FAC: LOCATION
+    ADDRESS: LOCATION

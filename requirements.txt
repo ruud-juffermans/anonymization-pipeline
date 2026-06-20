@@ -1,0 +1,15 @@
+# Core
+pyyaml>=6.0
+cryptography>=42.0
+
+# Document ingestion
+python-docx>=1.1       # .docx
+openpyxl>=3.1          # .xlsx
+pypdf>=4.0             # digital .pdf
+# .eml / .msg handled by stdlib email where possible
+
+# Local LLM client — only ever talks to a LOCAL Ollama (loopback / compose net)
+requests>=2.31
+
+# Optional NER backend (pipeline runs without it)
+# spacy>=3.7           # + python -m spacy download nl_core_news_lg

@@ -1,0 +1,43 @@
+# Local, self-contained anonimization stack: the pipeline + a local LLM.
+# No service depends on the public internet at runtime (only the one-time
+# `ollama pull` of a model). See README for the macOS / GPU notes.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: anon-ollama
+    # Models persist here between runs.
+    volumes:
+      - ollama_models:/root/.ollama
+    # Exposed on loopback only, so nothing on the network can reach it.
+    ports:
+      - "127.0.0.1:11434:11434"
+    restart: unless-stopped
+    networks:
+      - anon
+
+  pipeline:
+    build: .
+    container_name: anon-pipeline
+    env_file:
+      - .env
+    environment:
+      # Talk to the ollama service over the internal compose network.
+      OLLAMA_HOST: "http://ollama:11434"
+    depends_on:
+      - ollama
+    volumes:
+      # Put documents to anonymize in ./data on the host.
+      - ./data:/data
+      # Outputs and the encrypted vaults persist on the host.
+      - ./out:/app/out
+      - ./vaults:/app/vaults
+    networks:
+      - anon
+
+volumes:
+  ollama_models:
+
+networks:
+  anon:
+    driver: bridge
