@@ -25,10 +25,15 @@ def build_ner(cfg: Dict):
 
 
 def _spans_for(text: str, value: str, etype: str, score: float) -> List[Entity]:
-    """Find every exact occurrence of `value` and turn it into an Entity."""
+    """Find every occurrence of `value` in `text` and turn it into an Entity.
+
+    Tries an exact match first, then falls back to case-insensitive matching so a
+    model that alters casing (e.g. "amsterdam") still anchors to the real span.
+    """
     value = value.strip()
     if len(value) < 2:
         return []
+
     out: List[Entity] = []
     start = 0
     while True:
@@ -36,6 +41,20 @@ def _spans_for(text: str, value: str, etype: str, score: float) -> List[Entity]:
         if idx == -1:
             break
         out.append(Entity(idx, idx + len(value), etype, value, SOURCE_NER, score))
+        start = idx + len(value)
+    if out:
+        return out
+
+    # Case-insensitive fallback; keep the document's original substring/offsets.
+    low_text, low_val = text.lower(), value.lower()
+    start = 0
+    while True:
+        idx = low_text.find(low_val, start)
+        if idx == -1:
+            break
+        original = text[idx:idx + len(value)]
+        out.append(Entity(idx, idx + len(value), etype, original,
+                          SOURCE_NER, score * 0.95))
         start = idx + len(value)
     return out
 
@@ -63,21 +82,52 @@ class SpacyNER:
         return out
 
 
-_PROMPT = """Je bent een data-extractietool. Geef ALLEEN geldige JSON terug.
-Vind in de onderstaande Nederlandse tekst alle:
-- personen (volledige namen van mensen) -> type "PERSON"
-- organisaties / bedrijven -> type "ORG"
-- locaties en adressen (straat, plaats, postcode) -> type "LOCATION"
+_PROMPT = """Je bent een nauwkeurige named-entity-extractie tool voor Nederlandse \
+tekst (politie-/financieel onderzoek).
 
-Geef een JSON-lijst van objecten met exact deze velden: "text" (de exacte tekst
-zoals in het document) en "type". Verzin niets; alleen wat letterlijk voorkomt.
+Extraheer ELKE afzonderlijke entiteit als een APART object. Groepeer nooit meerdere \
+namen of een hele zin in één object.
+
+Types:
+- PERSON  : de naam van één persoon, bijv. "Jan de Vries", "P. Bakker". Titels of \
+functies zoals "mevrouw", "verdachte", "officier van justitie" horen NIET bij de naam.
+- ORG     : bedrijf, instantie of organisatie, bijv. "ABN AMRO", "Acme Holding B.V.".
+- LOCATION: plaats, straat, adres of postcode, bijv. "Amsterdam", "Keizersgracht 123".
+
+Neem exact de tekst over zoals die in het document staat. Verzin niets; alleen wat \
+letterlijk voorkomt.
+
+Voorbeeld:
+Tekst: "Piet Jansen werkt bij KPN in Den Haag."
+Antwoord: {{"entities":[{{"text":"Piet Jansen","type":"PERSON"}},\
+{{"text":"KPN","type":"ORG"}},{{"text":"Den Haag","type":"LOCATION"}}]}}
 
 Tekst:
 \"\"\"
 {text}
 \"\"\"
+"""
 
-JSON:"""
+# Ollama structured-output schema: forces an ARRAY of typed entities, so a weak
+# model cannot collapse everything into one object.
+_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "entities": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "type": {"type": "string",
+                             "enum": ["PERSON", "ORG", "LOCATION"]},
+                },
+                "required": ["text", "type"],
+            },
+        }
+    },
+    "required": ["entities"],
+}
 
 
 class OllamaNER:
@@ -97,7 +147,7 @@ class OllamaNER:
                 "model": self.model,
                 "prompt": _PROMPT.format(text=text),
                 "stream": False,
-                "format": "json",
+                "format": _SCHEMA,   # structured output -> array of entities
                 "options": {"temperature": 0},
             },
             timeout=self.timeout,
