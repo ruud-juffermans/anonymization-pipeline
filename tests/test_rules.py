@@ -23,7 +23,7 @@ def test_luhn():
 
 def test_detect_structured():
     text = ("BSN 111222333, rekening NL91ABNA0417164300, "
-            "kaart 4539 5787 6362 1486, mail jan@politie.nl, tel 06-12345678.")
+            "kaart 4539 5787 6362 1486, mail jan@example.nl, tel 06-12345678.")
     found = {e.type for e in rules.detect(text, {})}
     assert {"BSN", "IBAN", "CARD", "EMAIL", "PHONE"} <= found
 

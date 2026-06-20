@@ -82,15 +82,15 @@ class SpacyNER:
         return out
 
 
-_PROMPT = """Je bent een nauwkeurige named-entity-extractie tool voor Nederlandse \
-tekst (politie-/financieel onderzoek).
+_PROMPT = """Je bent een nauwkeurige named-entity-extractie tool voor vertrouwelijke \
+Nederlandse documenten.
 
 Extraheer ELKE afzonderlijke entiteit als een APART object. Groepeer nooit meerdere \
 namen of een hele zin in één object.
 
 Types:
 - PERSON  : de naam van één persoon, bijv. "Jan de Vries", "P. Bakker". Titels of \
-functies zoals "mevrouw", "verdachte", "officier van justitie" horen NIET bij de naam.
+functies zoals "mevrouw", "de heer", "directeur" horen NIET bij de naam.
 - ORG     : bedrijf, instantie of organisatie, bijv. "ABN AMRO", "Acme Holding B.V.".
 - LOCATION: plaats, straat, adres of postcode, bijv. "Amsterdam", "Keizersgracht 123".
 

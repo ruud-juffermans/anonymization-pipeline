@@ -24,7 +24,7 @@ def _cfg(tmp_path):
 def test_roundtrip(tmp_path):
     cfg = _cfg(tmp_path)
     anon = Anonymizer.for_case("CASE-1", "geheim", cfg)
-    text = "Verdachte gebruikt NL91ABNA0417164300 en BSN 111222333."
+    text = "Klant gebruikt NL91ABNA0417164300 en BSN 111222333."
     result = anon.anonymize_text(text)
 
     assert "NL91ABNA0417164300" not in result.anonymized_text

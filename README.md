@@ -1,22 +1,38 @@
-# Anonimization Pipeline
+# Anonymization Pipeline
 
 Local, offline-capable pipeline for **reversible pseudonymization** of confidential
-Dutch documents. Built for financial-investigation casework.
+documents — so you can work with sensitive text, **including sending it to an LLM,
+without exposing the underlying data**.
 
-Same entity → same token across an entire **case** (e.g. `Jan de Vries → PERSON_001`
-in every document of the case). The token→original mapping is stored in a
-**passphrase-encrypted vault** that never leaves your machine, so an authorized user
-can re-identify later.
+Working with LLMs on confidential material is a general problem: the moment a
+document leaves your control — pasted into a chat, sent to an API, indexed by a
+tool — its secrets are exposed and may be cached or retained. This pipeline detects
+the sensitive parts locally and replaces them with stable tokens, so only
+*pseudonymized* text ever leaves the machine. The raw values never do.
 
-> ⚠️ **Confidential data.** This tool handles classified material. Read
-> [SECURITY.md](SECURITY.md) before use. Keep your repository **private** and never
-> commit real documents, vaults, or outputs.
+Same entity → same token across a whole **case / collection** (e.g.
+`Jane Doe → PERSON_001` in every related document). The token→original mapping is
+stored in a **passphrase-encrypted vault** that never leaves your machine, so an
+authorized user can re-identify later — including mapping an LLM's response back to
+the real entities.
+
+```
+your confidential doc ──▶ [ anonymize locally ] ──▶ safe tokenized text
+                                                       │
+                                          (process / prompt any LLM, local or remote)
+                                                       │
+   original meaning  ◀── [ de-anonymize w/ vault ] ◀── tokenized result
+```
+
+> ⚠️ **Confidential data.** Read [SECURITY.md](SECURITY.md) before use. Never commit
+> real documents, vaults, or outputs (all gitignored by default).
 
 ## Design principles
 
-1. **Nothing leaves the machine.** All detection and processing is local. The only
-   network traffic is to a **local** LLM (Ollama on loopback / the compose network).
-   The pipeline also runs fully without an LLM (rules + optional spaCy).
+1. **Raw data stays local.** All detection and anonymization run on your machine; the
+   raw document is never sent anywhere. Only the *anonymized* output is safe to share
+   or feed to a downstream LLM. Detection itself can use a **local** LLM (Ollama on
+   loopback / the compose network) or run fully without one (rules + optional spaCy).
 2. **Hybrid detection.** High-risk *structured* identifiers (BSN, IBAN, cards) are
    matched by deterministic **regex + checksum** — never by a probabilistic model.
    *Unstructured* entities (names, orgs, addresses) use a local LLM or spaCy NER.
@@ -42,9 +58,9 @@ make model                 # pull the local LLM (qwen2.5:7b-instruct) into Ollam
 make test                  # run the test suite in the container
 
 # Put documents in ./data, then:
-docker compose exec pipeline python cli.py anonymize --case CASE-2026-001 /data/zaak.docx
+docker compose exec pipeline python cli.py anonymize --case CASE-2026-001 /data/document.docx
 docker compose exec pipeline python cli.py review      --case CASE-2026-001
-docker compose exec pipeline python cli.py deanonymize --case CASE-2026-001 /app/out/zaak.anon.txt
+docker compose exec pipeline python cli.py deanonymize --case CASE-2026-001 /app/out/document.anon.txt
 ```
 
 Host folders are mounted into the container:
@@ -76,9 +92,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m spacy download nl_core_news_lg   # optional, if NER_BACKEND=spacy
 
-python cli.py anonymize --case CASE-2026-001 ./data/zaak.docx --out ./out
+python cli.py anonymize --case CASE-2026-001 ./data/document.docx --out ./out
 python cli.py review      --case CASE-2026-001
-python cli.py deanonymize --case CASE-2026-001 ./out/zaak.anon.txt
+python cli.py deanonymize --case CASE-2026-001 ./out/document.anon.txt
 ```
 
 ## Configuration
@@ -113,8 +129,12 @@ return a clean array of typed entities. Default model: `qwen2.5:7b-instruct`.
 OLLAMA_MODEL=qwen2.5:7b-instruct python tools/eval_ner.py
 ```
 
-On the bundled set, `qwen2.5:7b-instruct` scores ~0.97 F1 with perfect recall on
-person and organisation names (the highest-risk leaks).
+On the bundled set, `qwen2.5:7b-instruct` scores ~0.97 F1 — perfect on organisations
+and locations, near-perfect on person names. Matching is **containment-aware**:
+over-redacting (e.g. including a title, `mevrouw P. Bakker`) still anonymizes the
+entity, so it is not scored as a miss. The rare genuine miss — an ambiguous surname
+with little surrounding context — is exactly why the human `review` step matters
+before sharing anything downstream.
 
 ## Project layout
 

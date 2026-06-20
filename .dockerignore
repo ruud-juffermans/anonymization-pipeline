@@ -5,7 +5,7 @@ __pycache__/
 .git/
 .gitignore
 
-# Never bake case data or secrets into an image.
+# Never bake confidential data or secrets into an image.
 vaults/
 out/
 data/

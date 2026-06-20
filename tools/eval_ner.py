@@ -23,10 +23,10 @@ from pipeline.ner import build_ner          # noqa: E402
 # (text, {(TYPE, value), ...}) — fake but realistic Dutch examples.
 GOLD = [
     (
-        "Verdachte Jan de Vries heeft samen met mevrouw P. Bakker een rekening bij "
-        "ABN AMRO en de Rabobank. Het bedrijf Acme Holding B.V. is gevestigd in "
-        "Amsterdam aan de Keizersgracht 123. Officier van justitie De Wit leidt het "
-        "onderzoek in Rotterdam.",
+        "De overeenkomst tussen Jan de Vries en mevrouw P. Bakker betreft een rekening "
+        "bij ABN AMRO en de Rabobank. Het bedrijf Acme Holding B.V. is gevestigd in "
+        "Amsterdam aan de Keizersgracht 123. Contactpersoon De Wit werkt vanuit "
+        "Rotterdam.",
         {
             ("PERSON", "jan de vries"), ("PERSON", "p. bakker"),
             ("PERSON", "de wit"),
@@ -46,7 +46,7 @@ GOLD = [
         },
     ),
     (
-        "Getuige Mohammed Ouali verklaarde dat de overdracht plaatsvond in Eindhoven, "
+        "Volgens het rapport van Mohammed Ouali vond de levering plaats in Eindhoven, "
         "in een pand van Vastgoed Brabant N.V. aan de Stratumsedijk 45.",
         {
             ("PERSON", "mohammed ouali"),
@@ -69,21 +69,37 @@ def main() -> int:
     print(f"backend={cfg['ner']['backend']} "
           f"model={cfg['ner'].get('ollama', {}).get('model', '-')}\n")
 
-    # counts[type] = [true_positive, predicted, gold]
-    counts = {t: [0, 0, 0] for t in TYPES}
+    # counts[type] = [covered_gold, matched_pred, n_pred, n_gold]
+    # Matching is containment-aware: a gold entity counts as covered if some
+    # predicted span of the same type contains it (or vice versa). This reflects
+    # the anonymization goal — over-redacting "mevrouw P. Bakker" still hides the
+    # name "P. Bakker", so it should not be scored as a miss.
+    counts = {t: [0, 0, 0, 0] for t in TYPES}
+
+    def _hit(a: str, b: str) -> bool:
+        return a in b or b in a
 
     for text, gold in GOLD:
         pred = {(e.type, _norm(e.text)) for e in ner(text)}
         gold_norm = {(t, _norm(v)) for t, v in gold}
-        for t in TYPES:
-            g = {v for (tp, v) in gold_norm if tp == t}
-            p = {v for (tp, v) in pred if tp == t}
-            counts[t][0] += len(g & p)
-            counts[t][1] += len(p)
-            counts[t][2] += len(g)
 
-        missed = gold_norm - pred
-        spurious = pred - gold_norm
+        missed, spurious = [], []
+        for t in TYPES:
+            g = [v for (tp, v) in gold_norm if tp == t]
+            p = [v for (tp, v) in pred if tp == t]
+            for gv in g:
+                if any(_hit(gv, pv) for pv in p):
+                    counts[t][0] += 1
+                else:
+                    missed.append((t, gv))
+            for pv in p:
+                if any(_hit(gv, pv) for gv in g):
+                    counts[t][1] += 1
+                else:
+                    spurious.append((t, pv))
+            counts[t][2] += len(p)
+            counts[t][3] += len(g)
+
         print(f"--- sample ({len(text)} chars) ---")
         if missed:
             print("  MISSED :", sorted(missed))
@@ -93,16 +109,16 @@ def main() -> int:
             print("  perfect")
 
     print("\n{:<10} {:>6} {:>6} {:>6}".format("TYPE", "PREC", "REC", "F1"))
-    tp = pp = gg = 0
+    cov = mat = npred = ngold = 0
     for t in TYPES:
         c = counts[t]
-        tp += c[0]; pp += c[1]; gg += c[2]
-        prec = c[0] / c[1] if c[1] else 0.0
-        rec = c[0] / c[2] if c[2] else 0.0
+        cov += c[0]; mat += c[1]; npred += c[2]; ngold += c[3]
+        prec = c[1] / c[2] if c[2] else 0.0
+        rec = c[0] / c[3] if c[3] else 0.0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
         print("{:<10} {:>6.2f} {:>6.2f} {:>6.2f}".format(t, prec, rec, f1))
-    prec = tp / pp if pp else 0.0
-    rec = tp / gg if gg else 0.0
+    prec = mat / npred if npred else 0.0
+    rec = cov / ngold if ngold else 0.0
     f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
     print("{:<10} {:>6.2f} {:>6.2f} {:>6.2f}".format("OVERALL", prec, rec, f1))
     return 0

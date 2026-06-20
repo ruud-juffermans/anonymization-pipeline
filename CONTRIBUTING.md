@@ -4,9 +4,9 @@ Thanks for your interest. A few guidelines specific to this project.
 
 ## Golden rule: no real data
 
-**Never** commit, attach, or paste real case material — documents, BSNs, IBANs,
-names, vaults, or anonymized outputs. Use synthetic/test data only (the test suite
-uses textbook-valid-but-fake numbers).
+**Never** commit, attach, or paste real confidential material — documents, IDs,
+account numbers, names, vaults, or anonymized outputs. Use synthetic/test data only
+(the test suite uses textbook-valid-but-fake numbers).
 
 ## Development setup
 
